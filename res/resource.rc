@@ -1,1 +1,3 @@
+#include "../include/resource.h"
+
 IDI_MYICON ICON "res/table.ico"
