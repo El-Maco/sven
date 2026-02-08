@@ -88,7 +88,6 @@ export default function MotorControlApp() {
         clearNotifications();
         setSelectedDirection(direction);
         setShowSvenDirectionButtons(true);
-        setSelectedValue(0);
     };
 
     const getSelectedSvenCommand = (moveMode: SvenMoveMode) => {
