@@ -3,12 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronUp, ChevronDown, Clock, LoaderCircle } from 'lucide-react';
 import { SvenCommand, SvenMoveMode, SvenDirection, SvenResponse, SvenState } from './types';
-import dotenv from 'dotenv';
-dotenv.config();
 
-const apiBaseUrl = `http://${process.env.NEXT_PUBLIC_SVEN_API_URL || 'localhost'}`;
-const apiPort = 3001;
-const svenCommandEndpoint = `${apiBaseUrl}:${apiPort}/api/sven/command`;
 
 const SVEN_POSITIONS = ['Bottom', 'Top', 'Armrest', 'AboveArmrest', 'Standing', 'Custom'] as const;
 const DURATIONS = [
@@ -43,8 +38,18 @@ export default function MotorControlApp() {
     const [calibrationSwitch, setCalibrationSwitch] = useState<boolean>(false);
     const svenStatePollingRef = useRef<NodeJS.Timeout | null>(null);
 
+    const getApiBaseUrl = () => {
+        if (typeof window !== 'undefined') {
+            return `http://${window.location.hostname}`;
+        }
+            return 'http://localhost';
+    }
+
+    const apiPort = 3001;
+    const svenCommandEndpoint = `${getApiBaseUrl()}:${apiPort}/api/sven/command`;
+
     const fetchSvenState = async () => {
-        const response = await fetch(`${apiBaseUrl}:${apiPort}/api/sven/state`);
+        const response = await fetch(`${getApiBaseUrl()}:${apiPort}/api/sven/state`);
         if (!response.ok) {
             throw new Error(`Error fetching Sven state: ${response.statusText}`);
         }
