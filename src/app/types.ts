@@ -5,6 +5,7 @@ export enum SvenCommand {
     DownRelative = "DownRelative",
     AbsoluteHeight = "AbsoluteHeight",
     Position = "Position",
+    Calibrate = "Calibrate",
 }
 
 export enum SvenMoveMode {

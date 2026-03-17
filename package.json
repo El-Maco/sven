@@ -1,13 +1,13 @@
 {
     "name": "sven-app",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "private": true,
     "scripts": {
         "dev": "next dev --turbopack",
         "build": "next build",
         "start": "next start",
         "lint": "next lint",
-        "deploy": "npm run build && rsync -avz --delete --rsync-path='sudo rsync' out/* maco@minimaco:/var/www/html/"
+        "deploy": "pnpm build && rsync -avz --delete --rsync-path='sudo rsync' out/* maco@minimaco:/var/www/html/"
     },
     "dependencies": {
         "dotenv": "^17.0.0",

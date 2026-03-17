@@ -40,6 +40,7 @@ export default function MotorControlApp() {
     const [statusTimeoutId, setStatusTimeoutId] = useState<NodeJS.Timeout | null>(null);
     const [selectedMode, setSelectedMode] = useState<SvenMoveMode>(SvenMoveMode.Duration);
     const [svenState, setSvenState] = useState<SvenState | null>(null);
+    const [calibrationSwitch, setCalibrationSwitch] = useState<boolean>(false);
     const svenStatePollingRef = useRef<NodeJS.Timeout | null>(null);
 
     const fetchSvenState = async () => {
@@ -65,7 +66,7 @@ export default function MotorControlApp() {
                 setIsLoading(false);
                 svenStatePollingRef.current = null;
             }
-        }, 250);
+        }, 500);
     }
 
     useEffect(() => {
@@ -98,7 +99,7 @@ export default function MotorControlApp() {
         } else if (moveMode === SvenMoveMode.Absolute) {
             return SvenCommand.AbsoluteHeight;
         } else if (moveMode === SvenMoveMode.Position) {
-            return SvenCommand.Position;
+            return calibrationSwitch ? SvenCommand.Calibrate : SvenCommand.Position;
         }
         return null;
     }
@@ -129,6 +130,7 @@ export default function MotorControlApp() {
                     setResponseNotification(null);
                 }, statusTimeout)
             )
+            startSvenStatePolling();
             /* eslint-disable  @typescript-eslint/no-explicit-any */
         } catch (error: any) {
             setResponseNotification({
@@ -136,8 +138,6 @@ export default function MotorControlApp() {
                 error: error.message,
                 timestamp: new Date().toLocaleTimeString()
             });
-        } finally {
-            startSvenStatePolling();
         }
         reset();
     };
@@ -188,9 +188,23 @@ export default function MotorControlApp() {
 
                     {/* POSITION */}
                     <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 mt-6 border border-white/20 shadow-2xl space-y-4">
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center justify-between mb-0">
                             <h2 className="text-lg font-semibold text-white">Move to a position</h2>
                             <p className="text-slate-300 text-sm font-mono">h: {((svenState?.height_mm || 0) / 10).toFixed(1)} cm</p>
+                        </div>
+                        <div className="flex flex-col gap-2 mt-0 text-sm text-slate-300">
+                            <p className="font-mono text-xs">
+                                calibration
+                            </p>
+                            <button
+                                onClick={() => setCalibrationSwitch(val => !val)}
+                                aria-pressed={calibrationSwitch}
+                                className={`w-10 h-6 rounded-full border-none relative cursor-pointer transition-colors duration-200 p-0 focus:outline-none ${calibrationSwitch ? 'bg-green-400' : 'bg-gray-300'}`}
+                            >
+                                <span
+                                    className={`block w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all duration-200 ${calibrationSwitch ? 'left-4.5' : 'left-0.5'}`}
+                                />
+                            </button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
