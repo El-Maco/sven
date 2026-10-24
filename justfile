@@ -20,7 +20,7 @@ firmware: web
 flash: web
     {{esp_env}}; cd firmware; set -a; . .env; set +a; cargo run --release
 
-check:
+check: web
     {{esp_env}}; cd firmware; set -a; . .env; set +a; cargo check
 
 fmt:
