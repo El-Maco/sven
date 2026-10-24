@@ -1,0 +1,9 @@
+target/
+firmware/target/
+firmware/.env
+web/node_modules/
+web/dist/
+web/.env
+web/.env.local
+*.tsbuildinfo
+.DS_Store
