@@ -6,7 +6,7 @@ use log::info;
 use serde::{Deserialize, Serialize};
 
 use crate::desk::gpio::{clear_stop, stop_requested, PulsePin};
-use crate::desk::motion::{mm_for_ms, ms_for_mm};
+use crate::desk::motion::{calibration_plan, mm_for_ms, ms_for_mm, CALIBRATION_GUARD_MS};
 
 /// Snapshot of everything the UI needs. `height_mm` is an estimate based on
 /// the open-loop motion table, and `calibrated` says whether that estimate has
@@ -107,13 +107,6 @@ impl<'d> SvenState<'d> {
     /// Extra travel folded into an end-stop move so it reaches the physical
     /// limit even when the height estimate is slightly off.
     const END_GUARD_MS: u32 = 5000;
-
-    /// Extra travel applied when calibration homes to an end. The pulse runs
-    /// past the estimated stop so the desk settles against the physical stop,
-    /// which clears error accumulated by open-loop moves. Once the motor is at
-    /// speed, the final second adds about 38 mm; increase it if calibration
-    /// still leaves a visible drift.
-    const CALIBRATION_GUARD_MS: u32 = 1000;
 
     pub fn new(
         pin_up: PulsePin<'d>,
@@ -434,37 +427,30 @@ impl<'d> SvenState<'d> {
         self.publish();
     }
 
-    /// Homes to an end and deliberately overdrives the estimated stop.
-    ///
-    /// A short guard pulse past the estimate makes the desk settle against the
-    /// physical stop, which clears accumulated open-loop error before the
-    /// height estimate is anchored. Before the first calibration the estimate
-    /// is meaningless, so the pulse covers the full travel range instead.
-    async fn home_to_end(&mut self, end: SvenPosition) {
-        let distance_mm = if self.calibrated {
-            match end {
-                SvenPosition::Bottom => self.height_mm.saturating_sub(Self::MIN_HEIGHT_MM),
-                SvenPosition::Top => Self::MAX_HEIGHT_MM.saturating_sub(self.height_mm),
-                _ => return,
-            }
+    async fn calibrate(&mut self, value: u32) {
+        let target = SvenPosition::try_from(value).unwrap_or(SvenPosition::Armrest);
+        let plan = calibration_plan(
+            self.calibrated,
+            self.height_mm,
+            Self::MIN_HEIGHT_MM,
+            Self::MAX_HEIGHT_MM,
+            CALIBRATION_GUARD_MS,
+        );
+        let end = if plan.down {
+            SvenPosition::Bottom
         } else {
-            Self::MAX_HEIGHT_MM - Self::MIN_HEIGHT_MM
+            SvenPosition::Top
         };
-        let duration_ms = ms_for_mm(distance_mm).saturating_add(Self::CALIBRATION_GUARD_MS);
 
         info!(
-            "Homing {:?} from estimated {} mm: {} mm travel plus {} ms guard in one {} ms pulse",
-            end,
-            self.height_mm,
-            distance_mm,
-            Self::CALIBRATION_GUARD_MS,
-            duration_ms
+            "Calibrating at {:?}: homing {:?} over {} mm in one {} ms pulse ({} ms guard)",
+            target, end, plan.distance_mm, plan.duration_ms, CALIBRATION_GUARD_MS
         );
 
-        match end {
-            SvenPosition::Bottom => self.move_down(duration_ms).await,
-            SvenPosition::Top => self.move_up(duration_ms).await,
-            _ => return,
+        if plan.down {
+            self.move_down(plan.duration_ms).await;
+        } else {
+            self.move_up(plan.duration_ms).await;
         }
 
         if self.stopped {
@@ -474,27 +460,6 @@ impl<'d> SvenState<'d> {
         self.height_mm = self.get_position_mm(end);
         self.position = end;
         self.publish();
-    }
-
-    async fn calibrate(&mut self, value: u32) {
-        let target = SvenPosition::try_from(value).unwrap_or(SvenPosition::Armrest);
-        let distance_to_bottom = self.height_mm.saturating_sub(Self::MIN_HEIGHT_MM);
-        let distance_to_top = Self::MAX_HEIGHT_MM.saturating_sub(self.height_mm);
-
-        // Without a trusted estimate the nearest end cannot be chosen, so home
-        // down over the full range.
-        let end = if !self.calibrated || distance_to_bottom < distance_to_top {
-            SvenPosition::Bottom
-        } else {
-            SvenPosition::Top
-        };
-
-        info!("Calibrating at {:?}: homing to {:?} first", target, end);
-        self.home_to_end(end).await;
-
-        if self.stopped {
-            return;
-        }
 
         self.calibrated = true;
         self.publish();

@@ -77,9 +77,95 @@ pub fn ms_for_mm(distance_mm: u32) -> u32 {
             / STEADY_MM_PER_S as u64) as u32
 }
 
+/// Extra motor time added to calibration homing so the desk settles against
+/// the physical end stop. At speed this covers roughly 77 mm of accumulated
+/// open-loop error.
+pub const CALIBRATION_GUARD_MS: u32 = 2000;
+
+/// A calibration homing pulse: direction, estimated distance, and motor
+/// on-time including the end-stop guard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HomingPlan {
+    pub down: bool,
+    pub distance_mm: u32,
+    pub duration_ms: u32,
+}
+
+/// Plans the pulse used to home the desk during calibration.
+///
+/// When `calibrated` is false the height estimate cannot be trusted, so the
+/// plan covers the full travel range downward. Otherwise it targets the
+/// nearest estimated end. `guard_ms` is added past that estimate so the desk
+/// settles against the physical stop and clears accumulated open-loop error.
+pub fn calibration_plan(
+    calibrated: bool,
+    height_mm: u32,
+    min_height_mm: u32,
+    max_height_mm: u32,
+    guard_ms: u32,
+) -> HomingPlan {
+    let (down, distance_mm) = if !calibrated {
+        (true, max_height_mm.saturating_sub(min_height_mm))
+    } else {
+        let to_bottom = height_mm.saturating_sub(min_height_mm);
+        let to_top = max_height_mm.saturating_sub(height_mm);
+        if to_bottom < to_top {
+            (true, to_bottom)
+        } else {
+            (false, to_top)
+        }
+    };
+
+    HomingPlan {
+        down,
+        distance_mm,
+        duration_ms: ms_for_mm(distance_mm).saturating_add(guard_ms),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const MIN: u32 = 622;
+    const MAX: u32 = 1274;
+
+    #[test]
+    fn uncalibrated_calibration_homes_down_over_the_full_range() {
+        let plan = calibration_plan(false, 0, MIN, MAX, CALIBRATION_GUARD_MS);
+        assert!(plan.down);
+        assert_eq!(plan.distance_mm, MAX - MIN);
+        assert_eq!(
+            plan.duration_ms,
+            ms_for_mm(MAX - MIN) + CALIBRATION_GUARD_MS
+        );
+    }
+
+    #[test]
+    fn calibration_targets_the_nearest_estimated_end() {
+        let low = calibration_plan(true, 700, MIN, MAX, CALIBRATION_GUARD_MS);
+        assert!(low.down);
+        assert_eq!(low.distance_mm, 700 - MIN);
+
+        let high = calibration_plan(true, 1200, MIN, MAX, CALIBRATION_GUARD_MS);
+        assert!(!high.down);
+        assert_eq!(high.distance_mm, MAX - 1200);
+
+        // Equidistant heights round toward the top end.
+        let mid = calibration_plan(true, (MIN + MAX) / 2, MIN, MAX, CALIBRATION_GUARD_MS);
+        assert!(!mid.down);
+    }
+
+    #[test]
+    fn calibration_guard_extends_every_homing_pulse() {
+        for height in [MIN, 750, 948, 1140, MAX] {
+            let plan = calibration_plan(true, height, MIN, MAX, CALIBRATION_GUARD_MS);
+            assert_eq!(
+                plan.duration_ms,
+                ms_for_mm(plan.distance_mm) + CALIBRATION_GUARD_MS
+            );
+        }
+    }
 
     #[test]
     fn measured_points_are_reproduced() {
