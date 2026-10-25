@@ -62,9 +62,9 @@ Commands and value units:
 |---|---|---|
 | `UpDuration` | milliseconds | Runs up for the given time. Always allowed. |
 | `DownDuration` | milliseconds | Runs down for the given time. Always allowed. |
-| `UpRelative` | millimetres | Requires calibration. |
-| `DownRelative` | millimetres | Requires calibration. |
-| `AbsoluteHeight` | millimetres | Clamped to 622..1274. Requires calibration. |
+| `UpRelative` | millimetres | Requires calibration. Clamped to the remaining travel and sent as one pulse. |
+| `DownRelative` | millimetres | Requires calibration. Clamped to the remaining travel and sent as one pulse. |
+| `AbsoluteHeight` | millimetres | Clamped to 622..1274. Requires calibration. Sent as one estimated pulse. |
 | `Position` | position index | `0` Bottom, `1` Top, `2` Armrest, `3` AboveArmrest, `4` Standing, `5` Custom. |
 | `Calibrate` | position index | Homes to the nearest end, then moves to the position and marks the desk calibrated. |
 
@@ -115,6 +115,23 @@ curl -X POST http://192.168.1.10/api/stop
 
 curl -N http://192.168.1.10/api/events
 ```
+
+## Motion model
+
+The desk is open loop: there is no encoder and no limit-switch input. The
+firmware maps motor on-time to travel with the measured table in
+`firmware/src/desk/motion.rs`. Values between measured points are linearly
+interpolated, and travel beyond the last point is extrapolated at the measured
+steady-state speed of 38 mm/s.
+
+Relative and absolute moves that are not one of the fixed position transitions
+are sent as a single continuous motor pulse. The whole distance is converted to
+a duration up front, so the motor does not stop and restart (and lose its ramp)
+partway through the move. Moves between two known positions keep their measured
+hardcoded durations.
+
+Relative moves are clamped to the calibrated range, so an oversized request
+stops at the nearest end instead of running past it.
 
 ## Calibration behavior
 

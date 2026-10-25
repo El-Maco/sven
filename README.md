@@ -108,10 +108,13 @@ is `web/public/icon.svg`. The exports are:
 ## Calibration
 
 The desk has no encoder. Height is estimated from the open-loop duration
-table, and state is not persisted across reboots yet. On boot the UI shows
-"Position unknown" until you enable calibration mode and choose a position.
-Calibration homes to the nearest end of the desk, then moves to the selected
-position.
+table, interpolated between the measured points and extrapolated at the
+measured steady-state speed. Relative moves are sent as one continuous pulse
+for the whole distance instead of being stepped through the table, so the
+motor does not stop and restart mid-move. State is not persisted across
+reboots yet. On boot the UI shows "Position unknown" until you enable
+calibration mode and choose a position. Calibration homes to the nearest end
+of the desk, then moves to the selected position.
 
 Duration moves are always available. Relative, absolute, and position moves
 require calibration.

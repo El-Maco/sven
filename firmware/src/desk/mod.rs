@@ -1,4 +1,5 @@
 pub mod gpio;
+pub mod motion;
 pub mod state;
 
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;

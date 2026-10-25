@@ -6,6 +6,7 @@ use log::info;
 use serde::{Deserialize, Serialize};
 
 use crate::desk::gpio::{clear_stop, stop_requested, PulsePin};
+use crate::desk::motion::{mm_for_ms, ms_for_mm};
 
 /// Snapshot of everything the UI needs. `height_mm` is an estimate based on
 /// the open-loop motion table, and `calibrated` says whether that estimate has
@@ -103,20 +104,9 @@ impl<'d> SvenState<'d> {
         (SvenPosition::Top, Self::MAX_HEIGHT_MM),
     ];
 
-    /// Duration to distance calibration. These are millimetres, not
-    /// centimetres, despite the historical name of this table.
-    const MS_TO_MM: &'static [(u32, u32)] = &[
-        (1000, 9),
-        (2000, 48),
-        (3000, 82),
-        (4000, 119),
-        (5000, 160),
-        (6000, 194),
-        (7000, 234),
-        (8000, 272),
-        (9000, 310),
-        (10000, 347),
-    ];
+    /// Extra travel folded into an end-stop move so it reaches the physical
+    /// limit even when the height estimate is slightly off.
+    const END_GUARD_MS: u32 = 5000;
 
     pub fn new(
         pin_up: PulsePin<'d>,
@@ -156,7 +146,7 @@ impl<'d> SvenState<'d> {
         Self::POSITIONS_MM
             .iter()
             .find(|&&(pos, _)| pos == position)
-            .map_or(Self::MIN_HEIGHT_MM, |&(_, height)| height)
+            .map_or(self.height_mm, |&(_, height)| height)
     }
 
     fn get_position_from_height(&self) -> SvenPosition {
@@ -171,27 +161,15 @@ impl<'d> SvenState<'d> {
             .map_or(SvenPosition::Custom, |&(pos, _)| pos)
     }
 
-    fn get_duration_mm(&self, ms: u32) -> u32 {
-        let seconds = ms / 1000;
-        if seconds > 10 {
-            return 347 + 38 * (seconds - 10);
-        }
-
-        Self::MS_TO_MM
-            .iter()
-            .find(|&&(duration, _)| (duration / 1000) == seconds)
-            .map_or(0, |&(_, mm)| mm)
-    }
-
     fn estimate_target(&self, command: DeskCommand) -> u32 {
         match command.command {
             SvenCommand::UpDuration => self
                 .height_mm
-                .saturating_add(self.get_duration_mm(command.value))
+                .saturating_add(mm_for_ms(command.value))
                 .min(Self::MAX_HEIGHT_MM),
             SvenCommand::DownDuration => self
                 .height_mm
-                .saturating_sub(self.get_duration_mm(command.value))
+                .saturating_sub(mm_for_ms(command.value))
                 .max(Self::MIN_HEIGHT_MM),
             SvenCommand::UpRelative => self
                 .height_mm
@@ -266,7 +244,7 @@ impl<'d> SvenState<'d> {
 
         info!("Moving up {} ms", delta_ms);
         let elapsed = self.pin_up.pulse(delta_ms).await;
-        let delta_mm = self.get_duration_mm(elapsed);
+        let delta_mm = mm_for_ms(elapsed);
         self.height_mm = Self::MAX_HEIGHT_MM.min(self.height_mm.saturating_add(delta_mm));
         self.position = self.get_position_from_height();
         if elapsed < delta_ms {
@@ -282,7 +260,7 @@ impl<'d> SvenState<'d> {
 
         info!("Moving down {} ms", delta_ms);
         let elapsed = self.pin_down.pulse(delta_ms).await;
-        let delta_mm = self.get_duration_mm(elapsed);
+        let delta_mm = mm_for_ms(elapsed);
         self.height_mm = Self::MIN_HEIGHT_MM.max(self.height_mm.saturating_sub(delta_mm));
         self.position = self.get_position_from_height();
         if elapsed < delta_ms {
@@ -292,54 +270,46 @@ impl<'d> SvenState<'d> {
     }
 
     pub async fn move_up_relative(&mut self, delta_mm: u32) {
-        let mut distance_left = delta_mm;
-
-        while distance_left > 0 && !self.stopped {
-            let (max_duration, max_distance) = Self::MS_TO_MM
-                .iter()
-                .rev()
-                .find(|&&(_, mm)| mm <= distance_left)
-                .unwrap_or(&(0, 0));
-
-            if *max_duration == 0 {
-                break;
-            }
-
-            info!("Moving up {} mm equates to {} ms", delta_mm, max_duration);
-            self.move_up(*max_duration).await;
-
-            if self.stopped {
-                break;
-            }
-
-            Timer::after(Duration::from_millis(1000)).await;
-            distance_left = distance_left.saturating_sub(*max_distance);
-        }
+        self.move_relative(delta_mm, true).await;
     }
 
     pub async fn move_down_relative(&mut self, delta_mm: u32) {
-        let mut distance_left = delta_mm;
+        self.move_relative(delta_mm, false).await;
+    }
 
-        while distance_left > 0 && !self.stopped {
-            let (max_duration, max_distance) = Self::MS_TO_MM
-                .iter()
-                .rev()
-                .find(|&&(_, mm)| mm <= distance_left)
-                .unwrap_or(&(0, 0));
+    /// Moves by an estimated distance in one continuous motor pulse.
+    ///
+    /// The measured table describes travel for a continuous run, so the entire
+    /// distance is converted to one duration up front. Splitting the move into
+    /// shorter pulses would restart the motor's ramp each time, which makes the
+    /// open-loop estimate worse rather than more precise.
+    async fn move_relative(&mut self, delta_mm: u32, up: bool) {
+        if self.stopped {
+            return;
+        }
 
-            if *max_duration == 0 {
-                break;
-            }
+        let available = if up {
+            Self::MAX_HEIGHT_MM.saturating_sub(self.height_mm)
+        } else {
+            self.height_mm.saturating_sub(Self::MIN_HEIGHT_MM)
+        };
+        let delta_mm = delta_mm.min(available);
+        if delta_mm == 0 {
+            return;
+        }
 
-            info!("Moving down {} mm equates to {} ms", delta_mm, max_duration);
-            self.move_down(*max_duration).await;
+        let duration_ms = ms_for_mm(delta_mm);
+        info!(
+            "Moving {} mm {} in one {} ms pulse",
+            delta_mm,
+            if up { "up" } else { "down" },
+            duration_ms
+        );
 
-            if self.stopped {
-                break;
-            }
-
-            Timer::after(Duration::from_millis(1000)).await;
-            distance_left = distance_left.saturating_sub(*max_distance);
+        if up {
+            self.move_up(duration_ms).await;
+        } else {
+            self.move_down(duration_ms).await;
         }
     }
 
@@ -368,17 +338,27 @@ impl<'d> SvenState<'d> {
             return;
         }
 
-        match self.position {
-            SvenPosition::Custom => match position {
+        let from_custom = self.position == SvenPosition::Custom;
+
+        if from_custom {
+            match position {
                 SvenPosition::Bottom => {
-                    self.move_down_relative(self.height_mm.saturating_sub(Self::MIN_HEIGHT_MM))
-                        .await;
-                    self.move_down(5000).await;
+                    let distance_mm = self.height_mm.saturating_sub(Self::MIN_HEIGHT_MM);
+                    let duration_ms = ms_for_mm(distance_mm).saturating_add(Self::END_GUARD_MS);
+                    info!(
+                        "Moving to bottom from estimated {} mm in one {} ms pulse",
+                        self.height_mm, duration_ms
+                    );
+                    self.move_down(duration_ms).await;
                 }
                 SvenPosition::Top => {
-                    self.move_up_relative(Self::MAX_HEIGHT_MM.saturating_sub(self.height_mm))
-                        .await;
-                    self.move_up(5000).await;
+                    let distance_mm = Self::MAX_HEIGHT_MM.saturating_sub(self.height_mm);
+                    let duration_ms = ms_for_mm(distance_mm).saturating_add(Self::END_GUARD_MS);
+                    info!(
+                        "Moving to top from estimated {} mm in one {} ms pulse",
+                        self.height_mm, duration_ms
+                    );
+                    self.move_up(duration_ms).await;
                 }
                 SvenPosition::Custom => {}
                 _ => {
@@ -389,52 +369,53 @@ impl<'d> SvenState<'d> {
                     );
                     self.move_to_height(target_height).await;
                 }
-            },
-            _ => {}
+            }
         }
 
         if self.stopped {
             return;
         }
 
-        match self.position {
-            SvenPosition::Top => match position {
-                SvenPosition::Top => self.move_up(5000).await,
-                SvenPosition::Standing => self.move_down(4300).await,
-                SvenPosition::AboveArmrest => self.move_down(13500).await,
-                SvenPosition::Armrest => self.move_down(14800).await,
-                SvenPosition::Bottom => self.move_down(20000).await,
+        if !from_custom {
+            match self.position {
+                SvenPosition::Top => match position {
+                    SvenPosition::Top => self.move_up(5000).await,
+                    SvenPosition::Standing => self.move_down(4300).await,
+                    SvenPosition::AboveArmrest => self.move_down(13500).await,
+                    SvenPosition::Armrest => self.move_down(14800).await,
+                    SvenPosition::Bottom => self.move_down(20000).await,
+                    _ => {}
+                },
+                SvenPosition::Armrest => match position {
+                    SvenPosition::Bottom => self.move_down(5000).await,
+                    SvenPosition::AboveArmrest => self.move_up(1920).await,
+                    SvenPosition::Standing => self.move_up(11000).await,
+                    SvenPosition::Top => self.move_up(16000).await,
+                    _ => {}
+                },
+                SvenPosition::AboveArmrest => match position {
+                    SvenPosition::Armrest => self.move_down(1900).await,
+                    SvenPosition::Bottom => self.move_down(7000).await,
+                    SvenPosition::Standing => self.move_up(9900).await,
+                    SvenPosition::Top => self.move_up(15000).await,
+                    _ => {}
+                },
+                SvenPosition::Standing => match position {
+                    SvenPosition::Armrest => self.move_down(10800).await,
+                    SvenPosition::AboveArmrest => self.move_down(9900).await,
+                    SvenPosition::Bottom => self.move_down(15000).await,
+                    SvenPosition::Top => self.move_up(5000).await,
+                    _ => {}
+                },
+                SvenPosition::Bottom => match position {
+                    SvenPosition::Armrest => self.move_up(4300).await,
+                    SvenPosition::AboveArmrest => self.move_up(5300).await,
+                    SvenPosition::Standing => self.move_up(15000).await,
+                    SvenPosition::Top => self.move_up(20000).await,
+                    _ => {}
+                },
                 _ => {}
-            },
-            SvenPosition::Armrest => match position {
-                SvenPosition::Bottom => self.move_down(5000).await,
-                SvenPosition::AboveArmrest => self.move_up(1920).await,
-                SvenPosition::Standing => self.move_up(11000).await,
-                SvenPosition::Top => self.move_up(16000).await,
-                _ => {}
-            },
-            SvenPosition::AboveArmrest => match position {
-                SvenPosition::Armrest => self.move_down(1900).await,
-                SvenPosition::Bottom => self.move_down(7000).await,
-                SvenPosition::Standing => self.move_up(9900).await,
-                SvenPosition::Top => self.move_up(15000).await,
-                _ => {}
-            },
-            SvenPosition::Standing => match position {
-                SvenPosition::Armrest => self.move_down(10800).await,
-                SvenPosition::AboveArmrest => self.move_down(9900).await,
-                SvenPosition::Bottom => self.move_down(15000).await,
-                SvenPosition::Top => self.move_up(5000).await,
-                _ => {}
-            },
-            SvenPosition::Bottom => match position {
-                SvenPosition::Armrest => self.move_up(4300).await,
-                SvenPosition::AboveArmrest => self.move_up(5300).await,
-                SvenPosition::Standing => self.move_up(15000).await,
-                SvenPosition::Top => self.move_up(20000).await,
-                _ => {}
-            },
-            _ => {}
+            }
         }
 
         if self.stopped {
@@ -513,7 +494,7 @@ impl<'d> SvenState<'d> {
         clear_stop();
 
         let elapsed = started.elapsed().as_millis() as u32;
-        let delta_mm = self.get_duration_mm(elapsed);
+        let delta_mm = mm_for_ms(elapsed);
 
         if up {
             self.height_mm = Self::MAX_HEIGHT_MM.min(self.height_mm.saturating_add(delta_mm));
