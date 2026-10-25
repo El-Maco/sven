@@ -47,7 +47,7 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
     "socket-udp",
 ] }
 critical-section = "1.2.0"
-embassy-executor = { version = "0.7.0", features = ["task-arena-size-65536"] }
+embassy-executor = { version = "0.7.0", features = ["task-arena-size-131072"] }
 embassy-sync = "0.6.2"
 embassy-time = "0.4.0"
 esp-hal-embassy = { version = "0.6.0", features = ["esp32s3"] }

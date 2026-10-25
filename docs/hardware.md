@@ -4,6 +4,13 @@ The controller is an ESP32-S3 driving the desk's existing manual-control
 inputs through optocouplers. It does not replace the desk controller; it
 simulates button presses.
 
+The test board reports:
+
+- Chip: ESP32-S3, revision v0.2
+- Flash: 16 MB
+- MAC: `74:4d:bd:7d:4a:1c`
+- USB: native USB JTAG/serial, `/dev/ttyACM0`
+
 ## Pinout
 
 | Signal | ESP32-S3 pin | Direction | Notes |

@@ -72,10 +72,14 @@ stack together in a separate change, not as part of a UI change.
 
 ## Memory
 
-The firmware allocates a 96 KB heap and a 64 KB embassy task arena. Four web
+The firmware allocates an 80 KB heap and a 128 KB embassy task arena. Four web
 tasks each hold 1 KB RX, 2 KB TX, and 2 KB HTTP buffers. `picoserve` uses no
-heap for serving. If RAM is tight, reduce `WEB_TASK_POOL_SIZE` to 3 before
-changing the network stack.
+heap for serving.
+
+A 64 KB arena booted on the test ESP32-S3 but panicked with `embassy-executor:
+task arena is full` when all four web tasks were spawned. 128 KB is the working
+value. If RAM is tight, reduce `WEB_TASK_POOL_SIZE` to 3 before changing the
+network stack.
 
 ## Endpoints
 

@@ -85,10 +85,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (state?.height_mm !== undefined) {
+    if (state?.calibrated && state.height_mm !== undefined) {
       setSelectedValue(state.height_mm);
     }
-  }, [state?.height_mm]);
+  }, [state?.calibrated, state?.height_mm]);
 
   useEffect(() => {
     return () => {
@@ -456,32 +456,38 @@ export default function App() {
 
           <section className="space-y-4 rounded-2xl border border-white/20 bg-white/10 p-6 shadow-2xl backdrop-blur-lg">
             <h2 className="text-lg font-semibold text-white">Move absolute</h2>
-            <form
-              className="flex items-center gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                sendCommand(selectedValue, SvenMoveMode.Absolute);
-              }}
-            >
-              <input
-                type="range"
-                min={622}
-                max={1274}
-                value={selectedValue}
-                onChange={(event) => setSelectedValue(Number(event.target.value))}
-                disabled={busy || !calibrated}
-                aria-label="Target height in millimetres"
-                className="flex-1 rounded-lg border-2 border-white/20 bg-white/5 p-3 text-slate-300 transition-all duration-200 focus:border-blue-400 focus:bg-white/10"
-              />
-              <button
-                type="submit"
-                disabled={busy || !selectedValue || !calibrated}
-                className="flex items-center justify-center gap-2 rounded-lg border-2 border-blue-400 bg-blue-500/20 p-3 text-blue-200 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40"
+            {!calibrated ? (
+              <p className="text-sm text-slate-400">
+                Calibrate the desk first to enable absolute moves.
+              </p>
+            ) : (
+              <form
+                className="flex items-center gap-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  sendCommand(selectedValue, SvenMoveMode.Absolute);
+                }}
               >
-                <Clock size={16} />
-                Set to {centimetres(selectedValue)} cm
-              </button>
-            </form>
+                <input
+                  type="range"
+                  min={622}
+                  max={1274}
+                  value={selectedValue}
+                  onChange={(event) => setSelectedValue(Number(event.target.value))}
+                  disabled={busy}
+                  aria-label="Target height in millimetres"
+                  className="flex-1 rounded-lg border-2 border-white/20 bg-white/5 p-3 text-slate-300 transition-all duration-200 focus:border-blue-400 focus:bg-white/10"
+                />
+                <button
+                  type="submit"
+                  disabled={busy || !selectedValue}
+                  className="flex items-center justify-center gap-2 rounded-lg border-2 border-blue-400 bg-blue-500/20 p-3 text-blue-200 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Clock size={16} />
+                  Set to {centimetres(selectedValue)} cm
+                </button>
+              </form>
+            )}
           </section>
 
           <footer className="rounded-xl border border-white/10 bg-white/5 p-4 text-xs text-slate-400">
