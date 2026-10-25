@@ -85,6 +85,23 @@ just typecheck  # TypeScript check
 
 Open `http://192.168.1.10` from a phone or laptop on the same network.
 
+## Install on your phone
+
+The ESP32 serves the icon, favicon, and web app manifest directly.
+
+- **iPhone/iPad:** open `http://192.168.1.10/` in Safari, tap Share, then
+  **Add to Home Screen**. iOS uses `icon-180.png`.
+- **Android:** open `http://192.168.1.10/` in Chrome, open the menu, then
+  **Add to Home screen** or **Install app**. The manifest provides the
+  192 px and 512 px icons.
+
+The icon source is `web/public/icon.svg`. The exports are:
+
+- `icon-512.png` for app icons
+- `icon-192.png` and `icon-180.png` for Android and iOS
+- `icon-rounded-512.png` for general use with transparent rounded corners
+- `favicon.svg` and `favicon-32.png` for the browser tab
+
 ## Calibration
 
 The desk has no encoder. Height is estimated from the open-loop duration

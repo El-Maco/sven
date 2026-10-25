@@ -19,7 +19,25 @@ pub static INDEX_HTML: &[u8] = include_bytes!(concat!(
     "/../web/dist/index.html"
 ));
 
+macro_rules! embedded_asset {
+    ($name:ident, $path:literal) => {
+        pub static $name: &[u8] =
+            include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../web/dist/", $path));
+    };
+}
+
+embedded_asset!(MANIFEST, "manifest.webmanifest");
+embedded_asset!(ICON_SVG, "icon.svg");
+embedded_asset!(ICON_180, "icon-180.png");
+embedded_asset!(ICON_192, "icon-192.png");
+embedded_asset!(ICON_512, "icon-512.png");
+embedded_asset!(FAVICON_SVG, "favicon.svg");
+embedded_asset!(FAVICON_32, "favicon-32.png");
+
 pub const WEB_TASK_POOL_SIZE: usize = 4;
+
+const NO_CACHE: &[(&str, &str)] = &[("Cache-Control", "no-cache")];
+const CACHE_ICON: &[(&str, &str)] = &[("Cache-Control", "public, max-age=86400")];
 
 #[derive(Serialize)]
 struct Ack {
@@ -45,7 +63,63 @@ impl picoserve::AppBuilder for AppProps {
                 get_service(File::with_content_type_and_headers(
                     "text/html; charset=utf-8",
                     INDEX_HTML,
-                    &[("Cache-Control", "no-cache")],
+                    NO_CACHE,
+                )),
+            )
+            .route(
+                "/manifest.webmanifest",
+                get_service(File::with_content_type_and_headers(
+                    "application/manifest+json",
+                    MANIFEST,
+                    NO_CACHE,
+                )),
+            )
+            .route(
+                "/icon.svg",
+                get_service(File::with_content_type_and_headers(
+                    "image/svg+xml",
+                    ICON_SVG,
+                    CACHE_ICON,
+                )),
+            )
+            .route(
+                "/icon-180.png",
+                get_service(File::with_content_type_and_headers(
+                    "image/png",
+                    ICON_180,
+                    CACHE_ICON,
+                )),
+            )
+            .route(
+                "/icon-192.png",
+                get_service(File::with_content_type_and_headers(
+                    "image/png",
+                    ICON_192,
+                    CACHE_ICON,
+                )),
+            )
+            .route(
+                "/icon-512.png",
+                get_service(File::with_content_type_and_headers(
+                    "image/png",
+                    ICON_512,
+                    CACHE_ICON,
+                )),
+            )
+            .route(
+                "/favicon.svg",
+                get_service(File::with_content_type_and_headers(
+                    "image/svg+xml",
+                    FAVICON_SVG,
+                    CACHE_ICON,
+                )),
+            )
+            .route(
+                "/favicon-32.png",
+                get_service(File::with_content_type_and_headers(
+                    "image/png",
+                    FAVICON_32,
+                    CACHE_ICON,
                 )),
             )
             .route("/api/state", get(get_state))

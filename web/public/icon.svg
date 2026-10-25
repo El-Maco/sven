@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Sven desk control">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#312e81"/>
+      <stop offset="0.55" stop-color="#4c1d95"/>
+      <stop offset="1" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="desk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dbeafe"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.58">
+      <stop offset="0" stop-color="#a78bfa" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+
+  <!-- Up -->
+  <path d="M184 154 L256 82 L328 154" fill="none" stroke="#22c55e" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Desk -->
+  <rect x="112" y="218" width="288" height="36" rx="18" fill="url(#desk)"/>
+  <rect x="148" y="254" width="30" height="64" rx="15" fill="url(#desk)"/>
+  <rect x="334" y="254" width="30" height="64" rx="15" fill="url(#desk)"/>
+
+  <!-- Down -->
+  <path d="M184 358 L256 430 L328 358" fill="none" stroke="#f43f5e" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
