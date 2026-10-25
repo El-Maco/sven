@@ -31,6 +31,7 @@ embedded_asset!(ICON_SVG, "icon.svg");
 embedded_asset!(ICON_180, "icon-180.png");
 embedded_asset!(ICON_192, "icon-192.png");
 embedded_asset!(ICON_512, "icon-512.png");
+embedded_asset!(ICON_MASKABLE_512, "icon-maskable-512.png");
 embedded_asset!(FAVICON_SVG, "favicon.svg");
 embedded_asset!(FAVICON_32, "favicon-32.png");
 
@@ -103,6 +104,14 @@ impl picoserve::AppBuilder for AppProps {
                 get_service(File::with_content_type_and_headers(
                     "image/png",
                     ICON_512,
+                    CACHE_ICON,
+                )),
+            )
+            .route(
+                "/icon-maskable-512.png",
+                get_service(File::with_content_type_and_headers(
+                    "image/png",
+                    ICON_MASKABLE_512,
                     CACHE_ICON,
                 )),
             )

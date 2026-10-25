@@ -95,10 +95,13 @@ The ESP32 serves the icon, favicon, and web app manifest directly.
   **Add to Home screen** or **Install app**. The manifest provides the
   192 px and 512 px icons.
 
-The icon source is `web/public/icon.svg`. The exports are:
+The icon is the supplied desk glyph, vectorized so it stays crisp at small
+sizes. The original is kept at `web/public/icon-source.jpg`; the traced source
+is `web/public/icon.svg`. The exports are:
 
 - `icon-512.png` for app icons
 - `icon-192.png` and `icon-180.png` for Android and iOS
+- `icon-maskable-512.png` for Android's circular mask, with extra padding
 - `icon-rounded-512.png` for general use with transparent rounded corners
 - `favicon.svg` and `favicon-32.png` for the browser tab
 

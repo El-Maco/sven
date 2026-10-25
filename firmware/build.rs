@@ -15,6 +15,7 @@ fn main() {
         "icon-180.png",
         "icon-192.png",
         "icon-512.png",
+        "icon-maskable-512.png",
         "favicon.svg",
         "favicon-32.png",
     ];
