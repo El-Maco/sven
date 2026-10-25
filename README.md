@@ -119,7 +119,10 @@ for the whole distance instead of being stepped through the table, so the
 motor does not stop and restart mid-move. State is not persisted across
 reboots yet. On boot the UI shows "Position unknown" until you enable
 calibration mode and choose a position. Calibration homes to the nearest end
-of the desk, then moves to the selected position.
+of the desk, drives briefly past that end so it settles against the physical
+stop, then moves to the selected position. The extra travel clears the error
+accumulated by open-loop moves. Before the first calibration the estimate is
+unknown, so it homes to the bottom over the full travel range.
 
 Duration moves are always available. Relative, absolute, and position moves
 require calibration.

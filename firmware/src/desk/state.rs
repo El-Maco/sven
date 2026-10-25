@@ -108,6 +108,13 @@ impl<'d> SvenState<'d> {
     /// limit even when the height estimate is slightly off.
     const END_GUARD_MS: u32 = 5000;
 
+    /// Extra travel applied when calibration homes to an end. The pulse runs
+    /// past the estimated stop so the desk settles against the physical stop,
+    /// which clears error accumulated by open-loop moves. Once the motor is at
+    /// speed, the final second adds about 38 mm; increase it if calibration
+    /// still leaves a visible drift.
+    const CALIBRATION_GUARD_MS: u32 = 1000;
+
     pub fn new(
         pin_up: PulsePin<'d>,
         pin_down: PulsePin<'d>,
@@ -427,16 +434,63 @@ impl<'d> SvenState<'d> {
         self.publish();
     }
 
+    /// Homes to an end and deliberately overdrives the estimated stop.
+    ///
+    /// A short guard pulse past the estimate makes the desk settle against the
+    /// physical stop, which clears accumulated open-loop error before the
+    /// height estimate is anchored. Before the first calibration the estimate
+    /// is meaningless, so the pulse covers the full travel range instead.
+    async fn home_to_end(&mut self, end: SvenPosition) {
+        let distance_mm = if self.calibrated {
+            match end {
+                SvenPosition::Bottom => self.height_mm.saturating_sub(Self::MIN_HEIGHT_MM),
+                SvenPosition::Top => Self::MAX_HEIGHT_MM.saturating_sub(self.height_mm),
+                _ => return,
+            }
+        } else {
+            Self::MAX_HEIGHT_MM - Self::MIN_HEIGHT_MM
+        };
+        let duration_ms = ms_for_mm(distance_mm).saturating_add(Self::CALIBRATION_GUARD_MS);
+
+        info!(
+            "Homing {:?} from estimated {} mm: {} mm travel plus {} ms guard in one {} ms pulse",
+            end,
+            self.height_mm,
+            distance_mm,
+            Self::CALIBRATION_GUARD_MS,
+            duration_ms
+        );
+
+        match end {
+            SvenPosition::Bottom => self.move_down(duration_ms).await,
+            SvenPosition::Top => self.move_up(duration_ms).await,
+            _ => return,
+        }
+
+        if self.stopped {
+            return;
+        }
+
+        self.height_mm = self.get_position_mm(end);
+        self.position = end;
+        self.publish();
+    }
+
     async fn calibrate(&mut self, value: u32) {
         let target = SvenPosition::try_from(value).unwrap_or(SvenPosition::Armrest);
         let distance_to_bottom = self.height_mm.saturating_sub(Self::MIN_HEIGHT_MM);
         let distance_to_top = Self::MAX_HEIGHT_MM.saturating_sub(self.height_mm);
 
-        if distance_to_bottom < distance_to_top {
-            self.move_to_position(SvenPosition::Bottom).await;
+        // Without a trusted estimate the nearest end cannot be chosen, so home
+        // down over the full range.
+        let end = if !self.calibrated || distance_to_bottom < distance_to_top {
+            SvenPosition::Bottom
         } else {
-            self.move_to_position(SvenPosition::Top).await;
-        }
+            SvenPosition::Top
+        };
+
+        info!("Calibrating at {:?}: homing to {:?} first", target, end);
+        self.home_to_end(end).await;
 
         if self.stopped {
             return;
@@ -444,7 +498,10 @@ impl<'d> SvenState<'d> {
 
         self.calibrated = true;
         self.publish();
-        self.move_to_position(target).await;
+
+        if target != end {
+            self.move_to_position(target).await;
+        }
     }
 
     /// Reads the physical buttons. Holding a button jogs the desk for as long

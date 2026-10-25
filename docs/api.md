@@ -66,7 +66,7 @@ Commands and value units:
 | `DownRelative` | millimetres | Requires calibration. Clamped to the remaining travel and sent as one pulse. |
 | `AbsoluteHeight` | millimetres | Clamped to 622..1274. Requires calibration. Sent as one estimated pulse. |
 | `Position` | position index | `0` Bottom, `1` Top, `2` Armrest, `3` AboveArmrest, `4` Standing, `5` Custom. |
-| `Calibrate` | position index | Homes to the nearest end, then moves to the position and marks the desk calibrated. |
+| `Calibrate` | position index | Homes past the nearest end to clear accumulated error, then moves to the position and marks the desk calibrated. |
 
 Position indexes match the `SvenPosition` enum order. The firmware keeps this
 schema for compatibility with the existing UI. A future version may accept a
@@ -141,5 +141,7 @@ absolute, and position moves are rejected by the UI until calibration. Duration
 moves remain available because they do not depend on the estimate.
 
 Calibration chooses the nearest end based on the current estimate, runs the
-motor until it reaches that end, then moves to the requested position. If the
-estimate is unknown, it homes to the bottom.
+motor past that end for a short guard window so the desk settles against the
+physical stop, then moves to the requested position. The guard clears error
+accumulated by open-loop moves. If the estimate is unknown, it homes to the
+bottom over the full travel range.
