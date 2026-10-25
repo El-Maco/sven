@@ -38,6 +38,15 @@ built to one self-contained `index.html` and embedded in the firmware image.
   ln -s "$CARGO_HOME/espflash-3.3.0/bin/espflash" "$CARGO_HOME/bin/espflash-3"
   ```
 - The `just` recipes source `$HOME/export-esp.sh` automatically if it exists.
+- Serial access to the ESP32. The USB port is usually `/dev/ttyACM0` and is
+  owned by `root:uucp`. Add your user to `uucp`
+  (`sudo usermod -aG uucp $USER`, then log out and back in), or run
+  `sudo chown $USER:$USER /dev/ttyACM0` after plugging the board in. The
+  helper script does the second option:
+  ```bash
+  ./firmware/modprobe.sh
+  ```
+  Run it as your user, not with `sudo`, so the script can preserve `$USER`.
 - Node.js 20+ and `pnpm`.
 - `just` (optional, but the commands below assume it).
 
