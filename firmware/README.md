@@ -24,8 +24,10 @@ the order.
 | `PREFIX` | `24` | Subnet prefix length |
 | `GATEWAY` | `192.168.1.1` | Default gateway |
 
-`SSID` and `PASSWORD` use `env!` and must be set at compile time. The network
-settings use `option_env!` with defaults.
+`SSID` and `PASSWORD` are required; the network settings default as shown.
+`build.rs` loads `firmware/.env` and forwards the values to rustc, so plain
+`cargo build` works without exporting anything. Variables already exported in
+your shell take precedence over the file.
 
 ## Toolchain
 

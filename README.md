@@ -60,6 +60,11 @@ Set `SSID`, `PASSWORD`, `STATIC_IP`, `PREFIX`, and `GATEWAY`. The default
 address is `192.168.1.10/24` with gateway `192.168.1.1`. Pick an address
 outside the router's DHCP pool.
 
+The firmware build reads `firmware/.env` automatically through `build.rs`, so
+you do not need to export these variables. Values already exported in your
+shell take precedence over the file. Rebuild after editing `.env`; Cargo
+tracks the file and picks up the change.
+
 ## Build and flash
 
 ```bash

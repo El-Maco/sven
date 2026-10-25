@@ -12,16 +12,16 @@ web:
 dev-web:
     SVEN_DESK_HOST=http://192.168.1.10 pnpm --dir web dev
 
-# Compile the firmware. Requires firmware/.env for SSID and PASSWORD.
+# Compile the firmware. Reads firmware/.env for SSID and PASSWORD.
 firmware: web
-    {{esp_env}}; cd firmware; set -a; . .env; set +a; cargo build --release
+    {{esp_env}}; cd firmware; cargo build --release
 
 # Build the UI, build the firmware, and flash it.
 flash: web
-    {{esp_env}}; cd firmware; set -a; . .env; set +a; cargo run --release
+    {{esp_env}}; cd firmware; cargo run --release
 
 check: web
-    {{esp_env}}; cd firmware; set -a; . .env; set +a; cargo check
+    {{esp_env}}; cd firmware; cargo check
 
 fmt:
     {{esp_env}}; cd firmware; cargo fmt

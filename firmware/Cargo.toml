@@ -7,6 +7,9 @@ version = "0.2.0"
 name = "sven-esp32"
 path = "./src/bin/main.rs"
 
+[build-dependencies]
+dotenvy = "0.15"
+
 [dependencies]
 embassy-net = { version = "0.6.0", features = [
     "tcp",
