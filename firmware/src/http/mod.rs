@@ -5,10 +5,12 @@ use picoserve::response::json::Json as JsonResponse;
 use picoserve::response::sse::{EventSource, EventWriter};
 use picoserve::response::{self, File, StatusCode};
 use picoserve::routing::{get, get_service, post};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::desk::gpio::STOP_REQUESTED;
-use crate::desk::state::{DeskCommand, DeskState, STATE};
+use crate::desk::state::{
+    add_position, positions, remove_position, DeskCommand, DeskState, PositionName, STATE,
+};
 use crate::desk::COMMANDS;
 use crate::net::STATIC_IP;
 
@@ -135,6 +137,8 @@ impl picoserve::AppBuilder for AppProps {
             .route("/api/events", get(get_events))
             .route("/api/command", post(post_command))
             .route("/api/stop", post(post_stop))
+            .route("/api/positions", get(get_positions).post(post_position))
+            .route("/api/positions/remove", post(post_remove_position))
             .route("/api/info", get(get_info))
     }
 }
@@ -152,7 +156,7 @@ struct StateEvents(
         'static,
         embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
         DeskState,
-        8,
+        16,
     >,
 );
 
@@ -222,6 +226,45 @@ async fn post_stop() -> impl response::IntoResponse {
     JsonResponse(Ack { accepted: true })
         .into_response()
         .with_status_code(StatusCode::ACCEPTED)
+}
+
+#[derive(Deserialize)]
+struct PositionRequest {
+    name: PositionName,
+    height_mm: u32,
+}
+
+#[derive(Deserialize)]
+struct RemovePositionRequest {
+    name: PositionName,
+}
+
+fn position_response(result: Result<(), &'static str>) -> impl response::IntoResponse {
+    let status = match result {
+        Ok(()) => StatusCode::OK,
+        Err(_) => StatusCode::BAD_REQUEST,
+    };
+    JsonResponse(Ack {
+        accepted: result.is_ok(),
+    })
+    .into_response()
+    .with_status_code(status)
+}
+
+async fn get_positions() -> impl response::IntoResponse {
+    JsonResponse(positions())
+}
+
+async fn post_position(
+    JsonRequest(request): JsonRequest<PositionRequest>,
+) -> impl response::IntoResponse {
+    position_response(add_position(request.name, request.height_mm))
+}
+
+async fn post_remove_position(
+    JsonRequest(request): JsonRequest<RemovePositionRequest>,
+) -> impl response::IntoResponse {
+    position_response(remove_position(request.name.as_str()))
 }
 
 async fn get_info() -> impl response::IntoResponse {

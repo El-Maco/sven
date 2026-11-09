@@ -1,7 +1,17 @@
 use std::path::Path;
 
 /// Variables the firmware reads at compile time.
-const ENV_KEYS: [&str; 5] = ["SSID", "PASSWORD", "STATIC_IP", "PREFIX", "GATEWAY"];
+const ENV_KEYS: [&str; 9] = [
+    "SSID",
+    "PASSWORD",
+    "STATIC_IP",
+    "PREFIX",
+    "GATEWAY",
+    "MQTT_HOST",
+    "MQTT_PORT",
+    "MQTT_USERNAME",
+    "MQTT_PASSWORD",
+];
 /// Variables that must be present, otherwise compilation fails.
 const REQUIRED_KEYS: [&str; 2] = ["SSID", "PASSWORD"];
 

@@ -4,4 +4,5 @@
 
 pub mod desk;
 pub mod http;
+pub mod mqtt;
 pub mod net;

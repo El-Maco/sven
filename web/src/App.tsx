@@ -11,6 +11,7 @@ import {
   Square,
   Wifi,
   WifiOff,
+  X,
 } from 'lucide-react';
 import * as api from './api';
 import { useDeskState } from './useDeskState';
@@ -18,18 +19,10 @@ import {
   SvenCommand,
   SvenDirection,
   SvenMoveMode,
+  type PositionEntry,
   type SvenInfo,
   type SvenResponse,
 } from './types';
-
-const SVEN_POSITIONS = [
-  'Bottom',
-  'Top',
-  'Armrest',
-  'AboveArmrest',
-  'Standing',
-  'Custom',
-] as const;
 
 const DURATIONS = [
   { label: '1 s', value: 1000 },
@@ -70,6 +63,8 @@ export default function App() {
     SvenMoveMode.Duration,
   );
   const [calibrationSwitch, setCalibrationSwitch] = useState(false);
+  const [positions, setPositions] = useState<PositionEntry[]>([]);
+  const [newPositionName, setNewPositionName] = useState('');
   const [notification, setNotification] = useState<SvenResponse | null>(null);
   const notificationTimeout = useRef<number | null>(null);
 
@@ -77,12 +72,21 @@ export default function App() {
   const isOnline = connection === 'online';
   const calibrated = state?.calibrated === true;
 
+  const loadPositions = useCallback(async () => {
+    try {
+      setPositions(await api.fetchPositions());
+    } catch {
+      setPositions([]);
+    }
+  }, []);
+
   useEffect(() => {
     api
       .fetchInfo()
       .then(setInfo)
       .catch(() => setInfo(null));
-  }, []);
+    void loadPositions();
+  }, [loadPositions]);
 
   useEffect(() => {
     if (state?.calibrated && state.height_mm !== undefined) {
@@ -202,6 +206,47 @@ export default function App() {
       });
     }
   };
+
+  const savePosition = async () => {
+    const name = newPositionName.trim();
+    if (!name || !calibrated || busy) return;
+    try {
+      await api.addPosition(name, state?.height_mm ?? 0);
+      setNewPositionName('');
+      await loadPositions();
+      showNotification({ success: true, data: { position: name } });
+    } catch (error) {
+      showNotification({
+        success: false,
+        error: error instanceof Error ? error.message : 'Could not save position',
+      });
+    }
+  };
+
+  const deletePosition = async (name: string) => {
+    if (busy) return;
+    try {
+      await api.removePosition(name);
+      await loadPositions();
+      showNotification({ success: true, data: { removed: name } });
+    } catch (error) {
+      showNotification({
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Could not remove position',
+      });
+    }
+  };
+
+  const positionButtons = [
+    { name: 'Bottom', height_mm: 622, index: 0, fixed: true },
+    { name: 'Top', height_mm: 1274, index: 1, fixed: true },
+    ...positions.map((position, index) => ({
+      ...position,
+      index: index + 2,
+      fixed: false,
+    })),
+  ];
 
   const reset = () => setShowDirectionButtons(false);
 
@@ -347,26 +392,59 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              {SVEN_POSITIONS.map((position, index) => (
-                <button
-                  key={position}
-                  onClick={() => sendCommand(index, SvenMoveMode.Position)}
-                  disabled={
-                    busy ||
-                    position === 'Custom' ||
-                    (!calibrated && !calibrationSwitch)
-                  }
-                  className={`flex items-center justify-center gap-2 rounded-lg border-2 p-3 transition-all duration-200 ${
-                    state?.position === position
-                      ? 'border-blue-400 bg-blue-900/20 text-blue-200'
-                      : 'border-white/20 bg-white/5 text-slate-300 hover:border-white/40 hover:bg-white/10'
-                  } disabled:cursor-not-allowed disabled:opacity-40`}
-                >
-                  <Clock size={16} />
-                  {position}
-                </button>
+              {positionButtons.map((position) => (
+                <div key={position.name} className="relative">
+                  <button
+                    onClick={() =>
+                      sendCommand(position.index, SvenMoveMode.Position)
+                    }
+                    disabled={busy || (!calibrated && !calibrationSwitch)}
+                    className={`flex w-full items-center justify-center gap-2 rounded-lg border-2 p-3 pr-8 transition-all duration-200 ${
+                      state?.position === position.name
+                        ? 'border-blue-400 bg-blue-900/20 text-blue-200'
+                        : 'border-white/20 bg-white/5 text-slate-300 hover:border-white/40 hover:bg-white/10'
+                    } disabled:cursor-not-allowed disabled:opacity-40`}
+                  >
+                    <Clock size={16} />
+                    <span className="truncate">{position.name}</span>
+                  </button>
+                  {!position.fixed && (
+                    <button
+                      onClick={() => deletePosition(position.name)}
+                      disabled={busy}
+                      aria-label={`Remove ${position.name}`}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-white/10 hover:text-red-200 disabled:opacity-40"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
+
+            <form
+              className="flex items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void savePosition();
+              }}
+            >
+              <input
+                value={newPositionName}
+                onChange={(event) => setNewPositionName(event.target.value)}
+                placeholder="New position name"
+                maxLength={24}
+                disabled={busy || !calibrated}
+                className="min-w-0 flex-1 rounded-lg border-2 border-white/20 bg-white/5 p-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none disabled:opacity-40"
+              />
+              <button
+                type="submit"
+                disabled={busy || !calibrated || !newPositionName.trim()}
+                className="rounded-lg border-2 border-emerald-400/40 bg-emerald-400/10 px-3 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Save height
+              </button>
+            </form>
           </section>
 
           <section className="space-y-4 rounded-2xl border border-white/20 bg-white/10 p-6 shadow-2xl backdrop-blur-lg">

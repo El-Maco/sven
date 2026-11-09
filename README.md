@@ -9,17 +9,22 @@ phone / laptop  --->  ESP32-S3 192.168.1.10:80
                         |- /api/state     current desk state
                         |- /api/events    server-sent events
                         |- /api/command   queue a movement
+                        |- /api/positions saved height presets
                         '- /api/stop      stop immediately
+
+MQTT broker  <---->  ESP32-S3 (retained sven/state, sven/positions)
 ```
 
-There is no MQTT broker, no API bridge, and no separate web server. The UI is
-built to one self-contained `index.html` and embedded in the firmware image.
+The firmware keeps no filesystem. It restores the last desk estimate and the
+position presets from retained MQTT messages, and publishes changes back to the
+broker. The UI is built to one self-contained `index.html` and embedded in the
+firmware image.
 
 ## Layout
 
 | Path | Purpose |
 |---|---|
-| `firmware/` | Rust `no_std` ESP32-S3 firmware, `esp-hal` + `embassy` + `picoserve` |
+| `firmware/` | Rust `no_std` ESP32-S3 firmware, `esp-hal` + `embassy` + `picoserve` + MQTT persistence |
 | `web/` | Vite + React + Tailwind UI, built to a single file |
 | `docs/` | API, Tailscale, and hardware notes |
 | `legacy/` | Archived backend/frontend from the MQTT-era architecture |
@@ -59,6 +64,11 @@ cp firmware/.env.example firmware/.env
 Set `SSID`, `PASSWORD`, `STATIC_IP`, `PREFIX`, and `GATEWAY`. The default
 address is `192.168.1.10/24` with gateway `192.168.1.1`. Pick an address
 outside the router's DHCP pool.
+
+Set `MQTT_HOST` to the broker's LAN IP and `MQTT_PORT` (default `1883`).
+`MQTT_USERNAME` and `MQTT_PASSWORD` are optional. Use an IP address rather than
+a hostname because the firmware does not configure a DNS server. If
+`MQTT_HOST` is empty, the firmware runs without persistence.
 
 The firmware build reads `firmware/.env` automatically through `build.rs`, so
 you do not need to export these variables. Values already exported in your
@@ -116,13 +126,21 @@ The desk has no encoder. Height is estimated from the open-loop duration
 table, interpolated between the measured points and extrapolated at the
 measured steady-state speed. Relative moves are sent as one continuous pulse
 for the whole distance instead of being stepped through the table, so the
-motor does not stop and restart mid-move. State is not persisted across
-reboots yet. On boot the UI shows "Position unknown" until you enable
-calibration mode and choose a position. Calibration homes to the nearest end
-of the desk, drives briefly past that end so it settles against the physical
-stop, then moves to the selected position. The extra travel clears the error
-accumulated by open-loop moves. Before the first calibration the estimate is
-unknown, so it homes to the bottom over the full travel range.
+motor does not stop and restart mid-move. User-defined positions are loaded
+from the retained `sven/positions` topic, and the last height/calibration
+state is restored from `sven/state` on boot. On a fresh broker the firmware
+seeds the three original presets once.
+
+Calibration homes to the nearest end of the desk, drives briefly past that end
+so it settles against the physical stop, then moves to the selected position.
+The extra travel clears the error accumulated by open-loop moves. Before the
+first calibration the estimate is unknown, so it homes to the bottom over the
+full travel range.
+
+Retained state lives on the broker. Enable broker persistence if the state
+must also survive a broker restart. If the desk is moved while the ESP32 is
+powered off, the restored estimate is stale; only an encoder could detect
+that.
 
 Duration moves are always available. Relative, absolute, and position moves
 require calibration.

@@ -31,8 +31,11 @@ Component datasheets are under `firmware/docs/components/`.
 ## Power and boot behavior
 
 The desk has no height encoder. The firmware estimates height from a
-duration-to-distance table and keeps the estimate in RAM. On boot the estimate
-is unknown until calibration.
+duration-to-distance table and restores the last calibrated estimate from the
+retained `sven/state` MQTT topic. If no retained state is available, the
+estimate is unknown until calibration. The position presets are restored from
+`sven/positions`; the firmware seeds the original three presets once when that
+topic does not exist.
 
 If the ESP32 reboots while the desk is moving, the optocoupler outputs return
 low when the GPIOs are initialized, so the desk stops. The desk controller's

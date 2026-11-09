@@ -23,12 +23,16 @@ pub async fn desk_task(
     pin_down: Output<'static>,
     button_up: Input<'static>,
     button_down: Input<'static>,
+    restored_height_mm: u32,
+    restored_calibrated: bool,
 ) -> ! {
     let mut desk = SvenState::new(
         PulsePin::new(pin_up, true),
         PulsePin::new(pin_down, true),
         button_up,
         button_down,
+        restored_height_mm,
+        restored_calibrated,
     );
 
     desk.publish();

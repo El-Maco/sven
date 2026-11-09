@@ -1,4 +1,4 @@
-import type { DeskState, SvenCommand, SvenInfo } from './types';
+import type { DeskState, PositionEntry, SvenCommand, SvenInfo } from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -49,5 +49,26 @@ export function sendCommand(
 export function stopDesk(): Promise<{ accepted: boolean }> {
   return request<{ accepted: boolean }>('/api/stop', {
     method: 'POST',
+  });
+}
+
+export function fetchPositions(): Promise<PositionEntry[]> {
+  return request<PositionEntry[]>('/api/positions');
+}
+
+export function addPosition(
+  name: string,
+  height_mm: number,
+): Promise<{ accepted: boolean }> {
+  return request<{ accepted: boolean }>('/api/positions', {
+    method: 'POST',
+    body: JSON.stringify({ name, height_mm }),
+  });
+}
+
+export function removePosition(name: string): Promise<{ accepted: boolean }> {
+  return request<{ accepted: boolean }>('/api/positions/remove', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
   });
 }

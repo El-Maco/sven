@@ -11,11 +11,13 @@ use esp_hal::rng::Rng;
 use esp_hal::timer::timg::TimerGroup;
 use esp_wifi::wifi::WifiStaDevice;
 use esp_wifi::EspWifiController;
-use log::info;
+use log::{error, info};
 use picoserve::AppBuilder;
 
 use sven_esp32::desk::desk_task;
+use sven_esp32::desk::state::{ensure_seeded_positions, DeskState};
 use sven_esp32::http::{web_task, AppProps, WEB_TASK_POOL_SIZE};
+use sven_esp32::mqtt::{enabled as mqtt_enabled, mqtt_task, BOOT as MQTT_BOOT};
 use sven_esp32::net::{connection_task, net_config, net_task};
 
 extern crate alloc;
@@ -72,13 +74,40 @@ async fn main(spawner: Spawner) {
         info!("Sven is reachable at http://{}", sven_esp32::net::STATIC_IP);
     }
 
+    let mut restored = DeskState::UNKNOWN;
+    if mqtt_enabled() {
+        if let Err(error) = spawner.spawn(mqtt_task(stack)) {
+            error!("Failed to spawn MQTT task: {:?}", error);
+        }
+        match embassy_time::with_timeout(Duration::from_secs(8), MQTT_BOOT.receive()).await {
+            Ok(boot) => {
+                if let Some(state) = boot.state {
+                    info!(
+                        "Restored desk state from MQTT: {} mm, calibrated={}",
+                        state.height_mm, state.calibrated
+                    );
+                    restored = state;
+                }
+            }
+            Err(_) => info!("MQTT persistence unavailable; starting uncalibrated"),
+        }
+    }
+    ensure_seeded_positions();
+
     let pin_up = Output::new(peripherals.GPIO5, Level::Low);
     let pin_down = Output::new(peripherals.GPIO7, Level::Low);
     let button_up = Input::new(peripherals.GPIO9, esp_hal::gpio::Pull::Down);
     let button_down = Input::new(peripherals.GPIO10, esp_hal::gpio::Pull::Down);
 
     spawner
-        .spawn(desk_task(pin_up, pin_down, button_up, button_down))
+        .spawn(desk_task(
+            pin_up,
+            pin_down,
+            button_up,
+            button_down,
+            restored.height_mm,
+            restored.calibrated,
+        ))
         .ok();
 
     let app = picoserve::make_static!(picoserve::AppRouter<AppProps>, AppProps.build_app());

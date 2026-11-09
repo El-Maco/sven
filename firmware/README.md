@@ -1,7 +1,8 @@
 # Firmware
 
 Rust `no_std` firmware for the ESP32-S3. It owns the motor pins, serves the
-embedded web UI, and exposes the HTTP API. There is no MQTT client.
+embedded web UI, exposes the HTTP API, and keeps the desk estimate and position
+presets in retained MQTT messages.
 
 ## Build from the monorepo root
 
@@ -23,6 +24,10 @@ the order.
 | `STATIC_IP` | `192.168.1.10` | Desk IPv4 address |
 | `PREFIX` | `24` | Subnet prefix length |
 | `GATEWAY` | `192.168.1.1` | Default gateway |
+| `MQTT_HOST` | unset | Broker IPv4 address. Leave unset to disable persistence |
+| `MQTT_PORT` | `1883` | Broker port |
+| `MQTT_USERNAME` | unset | Optional broker username |
+| `MQTT_PASSWORD` | unset | Optional broker password |
 
 `SSID` and `PASSWORD` are required; the network settings default as shown.
 `build.rs` loads `firmware/.env` and forwards the values to rustc, so plain
@@ -53,6 +58,7 @@ src/
     state.rs         motion model, state snapshot, calibration, buttons
   http/
     mod.rs           picoserve routes, SSE, embedded index.html
+  mqtt.rs            retained state/positions persistence
 ```
 
 ## Concurrency model
@@ -61,6 +67,13 @@ One task owns `SvenState` and the motor pins. HTTP handlers enqueue commands
 through a `Channel` and read snapshots through a `Watch`. The desk task also
 polls the physical buttons every 10 ms when no command is queued. `/api/stop`
 sets an atomic flag that the pulse loop checks every 50 ms.
+
+A separate MQTT task owns the broker connection. On boot it subscribes to
+`sven/state` and `sven/positions`, waits for the retained messages, and hands
+the restored state to `main` before the desk task starts. While running it
+publishes state changes and position edits with the retain flag. A 30 second
+heartbeat republishes the current values so a broker restart does not lose
+them when broker disk persistence is off.
 
 This means a long move cannot block the HTTP server, and there is exactly one
 writer for the pin state.

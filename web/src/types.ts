@@ -37,6 +37,11 @@ export interface DeskState {
   calibrated: boolean;
 }
 
+export interface PositionEntry {
+  name: string;
+  height_mm: number;
+}
+
 export interface SvenInfo {
   name: string;
   version: string;
